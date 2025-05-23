@@ -32,20 +32,30 @@ fun AddEditNoteScreen(
     LaunchedEffect(noteId) {
         if (noteId != null) {
             Log.d("AddEditNoteScreen", "Loading note with ID: $noteId")
-            val result = repository.getNotes()
-            if (result.isSuccess) {
-                val note = result.getOrNull()?.find { it.id == noteId }
-                if (note != null) {
-                    title = note.title
-                    content = note.content
-                    existingImageUrl = note.imageUrl
-                    Log.d("AddEditNoteScreen", "Note loaded: $note")
+            try {
+                val result = repository.getNotes()
+                if (result.isSuccess) {
+                    val note = result.getOrNull()?.find { it.id == noteId }
+                    if (note != null) {
+                        title = note.title
+                        content = note.content
+                        existingImageUrl = note.imageUrl
+                        Log.d("AddEditNoteScreen", "Note loaded: $note")
+                    } else {
+                        errorMessage = "Note not found"
+                        Log.e("AddEditNoteScreen", "Note with ID $noteId not found")
+                    }
                 } else {
-                    errorMessage = "Note not found"
+                    val error = result.exceptionOrNull()?.message ?: "Failed to load note"
+                    errorMessage = error
+                    Log.e("AddEditNoteScreen", "Failed to load note: $error")
                 }
-            } else {
-                errorMessage = "Failed to load note: ${result.exceptionOrNull()?.message}"
+            } catch (e: Exception) {
+                Log.e("AddEditNoteScreen", "Exception while loading note: ${e.message}", e)
+                errorMessage = "Error loading note: ${e.message}"
             }
+        } else {
+            Log.d("AddEditNoteScreen", "Add mode: No noteId provided")
         }
     }
 
@@ -100,20 +110,18 @@ fun AddEditNoteScreen(
                         val imageUrl = imageUri?.let {
                             Log.d("AddEditNoteScreen", "Uploading image...")
                             val result = repository.uploadImage(it, context)
-                            result.getOrNull().also {
-                                if (result.isFailure) {
-                                    Log.e("AddEditNoteScreen", "Image upload failed: ${result.exceptionOrNull()?.message}")
-                                }
+                            result.getOrThrow().also {
+                                Log.d("AddEditNoteScreen", "Image uploaded successfully. URL: $it")
                             }
                         } ?: existingImageUrl
-                        Log.d("AddEditNoteScreen", "Image URL: $imageUrl")
+                        Log.d("AddEditNoteScreen", "Image URL to save: $imageUrl")
                         val note = Note(
                             id = noteId ?: "",
                             title = title,
                             content = content,
                             imageUrl = imageUrl
                         )
-                        Log.d("AddEditNoteScreen", "Saving note: $note")
+                        Log.d("AddEditNoteScreen", "Saving note to Firebase: $note")
                         val result = repository.saveNote(note)
                         if (result.isSuccess) {
                             Log.d("AddEditNoteScreen", "Note saved successfully")
@@ -121,7 +129,7 @@ fun AddEditNoteScreen(
                         } else {
                             val error = result.exceptionOrNull()?.message ?: "Failed to save note"
                             Log.e("AddEditNoteScreen", "Failed to save note: $error")
-                            errorMessage = error
+                            errorMessage = "Failed to save note: $error"
                         }
                     } catch (e: Exception) {
                         Log.e("AddEditNoteScreen", "Exception while saving note: ${e.message}", e)

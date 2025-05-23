@@ -1,19 +1,13 @@
 package ui.screens
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import android.util.Log
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -22,6 +16,8 @@ import coil.compose.AsyncImage
 import data.Note
 import data.NoteRepository
 import kotlinx.coroutines.launch
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
 
 @Composable
 fun HomeScreen(
@@ -30,16 +26,22 @@ fun HomeScreen(
 ) {
     val repository = NoteRepository()
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
     var notes by remember { mutableStateOf<List<Note>>(emptyList()) }
     var errorMessage by remember { mutableStateOf("") }
 
     fun loadNotes() {
         coroutineScope.launch {
-            val result = repository.getNotes()
-            if (result.isSuccess) {
-                notes = result.getOrNull() ?: emptyList()
-            } else {
-                errorMessage = result.exceptionOrNull()?.message ?: "Failed to load notes"
+            try {
+                val result = repository.getNotes()
+                if (result.isSuccess) {
+                    notes = result.getOrNull() ?: emptyList()
+                } else {
+                    errorMessage = result.exceptionOrNull()?.message ?: "Failed to load notes"
+                }
+            } catch (e: Exception) {
+                Log.e("HomeScreen", "Error loading notes: ${e.message}", e)
+                errorMessage = "Error loading notes: ${e.message}"
             }
         }
     }
@@ -50,7 +52,15 @@ fun HomeScreen(
 
     Scaffold(
         floatingActionButton = {
-            FloatingActionButton(onClick = onAddNote) {
+            FloatingActionButton(onClick = {
+                Log.d("HomeScreen", "Add Note button clicked")
+                try {
+                    onAddNote()
+                } catch (e: Exception) {
+                    Log.e("HomeScreen", "Error navigating to AddEditNoteScreen: ${e.message}", e)
+                    errorMessage = "Failed to open add note screen: ${e.message}"
+                }
+            }) {
                 Text("+")
             }
         }
@@ -98,6 +108,22 @@ fun HomeScreen(
                             }) {
                                 Icon(Icons.Default.Delete, contentDescription = "Delete Note")
                             }
+                            note.imageUrl?.let { url ->
+                                IconButton(onClick = {
+                                    coroutineScope.launch {
+                                        val result = repository.downloadImage(url, context)
+                                        if (result.isSuccess) {
+                                            Log.d("HomeScreen", "Image downloaded: ${result.getOrNull()}")
+                                            Toast.makeText(context, "Image downloaded to Downloads", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            Log.e("HomeScreen", "Failed to download image: ${result.exceptionOrNull()?.message}")
+                                            errorMessage = "Failed to download image: ${result.exceptionOrNull()?.message}"
+                                        }
+                                    }
+                                }) {
+                                    Icon(Icons.Default.Download, contentDescription = "Download Image")
+                                }
+                            }
                         }
                     }
                 }
@@ -109,5 +135,3 @@ fun HomeScreen(
         }
     }
 }
-
-
